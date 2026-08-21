@@ -1,125 +1,136 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+
+import { useTheme } from './hooks/useTheme';
+import TaskForm from './components/TaskForm';
+import TaskList from './components/TaskList';
+import ThemeToggle from './components/ThemeToggle';
 import './App.css';
 
 function App() {
-  const [data, setData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { theme, setTheme } = useTheme();
+  const [tasks, setTasks] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [newItem, setNewItem] = useState('');
+  const [sortBy, setSortBy] = useState('created_at');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchTasks = useCallback(async (currentSortBy) => {
     try {
-      setLoading(true);
-      const response = await fetch('/api/items');
+      setIsLoading(true);
+      const response = await fetch(`/api/tasks?sortBy=${currentSortBy}`);
       if (!response.ok) {
         throw new Error('Network response was not ok');
       }
       const result = await response.json();
-      setData(result);
+      setTasks(result);
       setError(null);
     } catch (err) {
-      setError('Failed to fetch data: ' + err.message);
-      console.error('Error fetching data:', err);
+      setError('Failed to load tasks: ' + err.message);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  };
+  }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!newItem.trim()) return;
+  useEffect(() => {
+    fetchTasks(sortBy);
+  }, [fetchTasks, sortBy]);
 
+  const handleAddTask = async (task) => {
+    setIsSubmitting(true);
     try {
-      const response = await fetch('/api/items', {
+      const response = await fetch('/api/tasks', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name: newItem }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(task),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to add item');
+        throw new Error('Failed to add task');
       }
 
-      const result = await response.json();
-      setData([...data, result]);
-      setNewItem('');
+      const created = await response.json();
+      setTasks((current) => [...current, created]);
+      setError(null);
+      return true;
     } catch (err) {
-      setError('Error adding item: ' + err.message);
-      console.error('Error adding item:', err);
+      setError('Error adding task: ' + err.message);
+      return false;
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleDelete = async (itemId) => {
+  const handleUpdateTask = async (id, updates) => {
     try {
-      const response = await fetch(`/api/items/${itemId}`, {
-        method: 'DELETE',
+      const response = await fetch(`/api/tasks/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete item');
+        throw new Error('Failed to update task');
       }
 
-      setData(data.filter(item => item.id !== itemId));
+      const updated = await response.json();
+      setTasks((current) => current.map((task) => (task.id === id ? updated : task)));
+      setError(null);
+      return true;
+    } catch (err) {
+      setError('Error updating task: ' + err.message);
+      return false;
+    }
+  };
+
+  const handleDeleteTask = async (id) => {
+    setDeletingId(id);
+    try {
+      const response = await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete task');
+      }
+
+      setTasks((current) => current.filter((task) => task.id !== id));
       setError(null);
     } catch (err) {
-      setError('Error deleting item: ' + err.message);
-      console.error('Error deleting item:', err);
+      setError('Error deleting task: ' + err.message);
+    } finally {
+      setDeletingId(null);
     }
   };
 
   return (
-    <div className="App">
-      <header className="App-header">
-        <h1>To Do App</h1>
-        <p>Keep track of your tasks</p>
-      </header>
+    <div className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-6">
+        <header className="flex flex-wrap items-center justify-between gap-3 rounded-md bg-primary px-4 py-4 text-primary-foreground">
+          <div>
+            <h1 className="text-2xl font-bold">To Do App</h1>
+            <p className="text-sm">Keep track of your tasks</p>
+          </div>
+          <ThemeToggle theme={theme} onChange={setTheme} />
+        </header>
 
-      <main>
-        <section className="add-item-section">
-          <h2>Add New Item</h2>
-          <form onSubmit={handleSubmit}>
-            <input
-              type="text"
-              value={newItem}
-              onChange={(e) => setNewItem(e.target.value)}
-              placeholder="Enter item name"
-            />
-            <button type="submit">Add Item</button>
-          </form>
+        <section aria-labelledby="add-task-heading" className="rounded-md border border-border bg-card p-4">
+          <h2 id="add-task-heading" className="sr-only">
+            Add task
+          </h2>
+          <TaskForm onSubmit={handleAddTask} isSubmitting={isSubmitting} />
         </section>
 
-        <section className="items-section">
-          <h2>Items from Database</h2>
-          {loading && <p>Loading data...</p>}
-          {error && <p className="error">{error}</p>}
-          {!loading && !error && (
-            <ul>
-              {data.length > 0 ? (
-                data.map((item) => (
-                  <li key={item.id}>
-                    <span>{item.name}</span>
-                    <button 
-                      onClick={() => handleDelete(item.id)}
-                      className="delete-btn"
-                      type="button"
-                    >
-                      Delete
-                    </button>
-                  </li>
-                ))
-              ) : (
-                <p>No items found. Add some!</p>
-              )}
-            </ul>
-          )}
-        </section>
-      </main>
+        <TaskList
+          tasks={tasks}
+          isLoading={isLoading}
+          error={error}
+          onRetry={() => fetchTasks(sortBy)}
+          sortBy={sortBy}
+          onSortChange={setSortBy}
+          onUpdate={handleUpdateTask}
+          onDelete={handleDeleteTask}
+          deletingId={deletingId}
+        />
+      </div>
     </div>
   );
 }

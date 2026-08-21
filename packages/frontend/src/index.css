@@ -1,3 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Semantic color tokens (RGB triplets so Tailwind's alpha-value modifier works) */
+:root {
+  --color-background: 255 255 255;
+  --color-foreground: 15 23 42;
+  --color-card: 248 250 252;
+  --color-border: 226 232 240;
+  --color-muted-foreground: 100 116 139;
+  --color-primary: 37 99 235;
+  --color-primary-foreground: 255 255 255;
+  --color-destructive: 220 38 38;
+  --color-destructive-foreground: 255 255 255;
+  --color-ring: 37 99 235;
+}
+
+.dark {
+  --color-background: 15 23 42;
+  --color-foreground: 241 245 249;
+  --color-card: 30 41 59;
+  --color-border: 51 65 85;
+  --color-muted-foreground: 148 163 184;
+  --color-primary: 96 165 250;
+  --color-primary-foreground: 15 23 42;
+  --color-destructive: 248 113 113;
+  --color-destructive-foreground: 15 23 42;
+  --color-ring: 96 165 250;
+}
+
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
