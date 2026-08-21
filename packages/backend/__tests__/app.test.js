@@ -58,6 +58,14 @@ describe('API Endpoints', () => {
       // Undated tasks sort after dated ones
       expect(ids.indexOf(withoutDueDate.id)).toBeGreaterThan(ids.indexOf(withDueDate.id));
     });
+
+    it('should use created_at sorting for an unknown sort field', async () => {
+      const response = await request(app).get('/api/tasks?sortBy=unknown');
+
+      expect(response.status).toBe(200);
+      const createdAtValues = response.body.map((task) => task.created_at);
+      expect(createdAtValues).toEqual([...createdAtValues].sort());
+    });
   });
 
   describe('POST /api/tasks', () => {
@@ -106,6 +114,16 @@ describe('API Endpoints', () => {
       expect(response.body).toHaveProperty('error', 'Task description is required');
     });
 
+    it('should return 400 if description is not a string', async () => {
+      const response = await request(app)
+        .post('/api/tasks')
+        .send({ description: 123 })
+        .set('Accept', 'application/json');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty('error', 'Task description is required');
+    });
+
     it('should return 400 if due_date is invalid', async () => {
       const response = await request(app)
         .post('/api/tasks')
@@ -141,6 +159,31 @@ describe('API Endpoints', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.due_date).toBe('2030-06-15');
+      expect(response.body.description).toBe(task.description);
+    });
+
+    it('should return 400 if the updated due date is invalid', async () => {
+      const task = await createTask('Task with invalid update date');
+
+      const response = await request(app)
+        .put(`/api/tasks/${task.id}`)
+        .send({ due_date: 'not-a-date' })
+        .set('Accept', 'application/json');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty('error', 'Due date must be a valid date string');
+    });
+
+    it('should return 400 if the updated description is not a string', async () => {
+      const task = await createTask('Task with invalid update description');
+
+      const response = await request(app)
+        .put(`/api/tasks/${task.id}`)
+        .send({ description: 123 })
+        .set('Accept', 'application/json');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty('error', 'Task description is required');
     });
 
     it('should clear a task due date', async () => {

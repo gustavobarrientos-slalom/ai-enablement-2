@@ -68,10 +68,20 @@ describe('App Component', () => {
   });
 
   test('shows a loading state before tasks resolve', async () => {
-    await act(async () => {
-      render(<App />);
-    });
+    let resolveTasks;
+    server.use(
+      rest.get('/api/tasks', (req, res, ctx) => new Promise((resolve) => {
+        resolveTasks = () => resolve(res(ctx.status(200), ctx.json(sampleTasks)));
+      }))
+    );
 
+    render(<App />);
+
+    expect(screen.queryByText('Test Task 1')).not.toBeInTheDocument();
+    expect(document.querySelector('ul[aria-hidden="true"]')).toBeInTheDocument();
+
+    await waitFor(() => expect(resolveTasks).toEqual(expect.any(Function)));
+    resolveTasks();
     await waitFor(() => {
       expect(screen.getByText('Test Task 1')).toBeInTheDocument();
     });
@@ -107,6 +117,17 @@ describe('App Component', () => {
 
   test('adds a new task through the form', async () => {
     const user = userEvent.setup();
+    let submittedTask;
+    server.use(
+      rest.post('/api/tasks', async (req, res, ctx) => {
+        submittedTask = await req.json();
+        return res(ctx.status(201), ctx.json({
+          id: 3,
+          ...submittedTask,
+          created_at: '2023-01-03T00:00:00.000Z',
+        }));
+      })
+    );
 
     await act(async () => {
       render(<App />);
@@ -123,6 +144,36 @@ describe('App Component', () => {
     await waitFor(() => {
       expect(screen.getByText('New Test Task')).toBeInTheDocument();
     });
+    expect(submittedTask).toEqual({ description: 'New Test Task', due_date: null });
+  });
+
+  test('submits a due date with a new task and clears both fields', async () => {
+    const user = userEvent.setup();
+    let submittedTask;
+    server.use(
+      rest.post('/api/tasks', async (req, res, ctx) => {
+        submittedTask = await req.json();
+        return res(ctx.status(201), ctx.json({
+          id: 3,
+          ...submittedTask,
+          created_at: '2023-01-03T00:00:00.000Z',
+        }));
+      })
+    );
+
+    render(<App />);
+    await waitFor(() => expect(screen.getByText('Test Task 1')).toBeInTheDocument());
+
+    const descriptionInput = screen.getByLabelText('Add new item');
+    const dueDateInput = screen.getByLabelText('Due date (optional)');
+    await user.type(descriptionInput, 'Dated task');
+    await user.type(dueDateInput, '2030-05-01');
+    await user.click(screen.getByRole('button', { name: 'Add item' }));
+
+    await waitFor(() => expect(screen.getByText('Dated task')).toBeInTheDocument());
+    expect(submittedTask).toEqual({ description: 'Dated task', due_date: '2030-05-01' });
+    expect(descriptionInput).toHaveValue('');
+    expect(dueDateInput).toHaveValue('');
   });
 
   test('disables submission for blank input', async () => {
@@ -175,6 +226,20 @@ describe('App Component', () => {
     await waitFor(() => {
       expect(screen.queryByText('Test Task 1')).not.toBeInTheDocument();
     });
+  });
+
+  test('keeps the task visible when delete fails', async () => {
+    const user = userEvent.setup();
+    server.use(
+      rest.delete('/api/tasks/:id', (req, res, ctx) => res(ctx.status(500)))
+    );
+
+    render(<App />);
+    await waitFor(() => expect(screen.getByText('Test Task 1')).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Delete Test Task 1' }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/Error deleting task/));
+    expect(screen.getByText('Test Task 1')).toBeInTheDocument();
   });
 
   test('sorts tasks by due date', async () => {
@@ -239,5 +304,36 @@ describe('App Component', () => {
     // Existing tasks remain visible, and the input value is preserved
     expect(screen.getByText('Test Task 1')).toBeInTheDocument();
     expect(input).toHaveValue('Will fail');
+  });
+
+  test('keeps edit mode open when update fails', async () => {
+    const user = userEvent.setup();
+    server.use(
+      rest.put('/api/tasks/:id', (req, res, ctx) => res(ctx.status(500)))
+    );
+
+    render(<App />);
+    await waitFor(() => expect(screen.getByText('Test Task 1')).toBeInTheDocument());
+    await user.click(screen.getAllByRole('button', { name: 'Edit' })[0]);
+    const editInput = screen.getByLabelText('Task description');
+    await user.clear(editInput);
+    await user.type(editInput, 'Failed update');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(/Error updating task/));
+    expect(screen.getByLabelText('Task description')).toHaveValue('Failed update');
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+  });
+
+  test('persists the selected theme and applies the dark class', async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+    await waitFor(() => expect(screen.getByText('Test Task 1')).toBeInTheDocument());
+    await user.selectOptions(screen.getByLabelText(/Theme, currently System/), 'dark');
+
+    expect(screen.getByLabelText(/Theme, currently Dark/)).toHaveValue('dark');
+    expect(document.documentElement).toHaveClass('dark');
+    expect(window.localStorage.getItem('todo-app-theme')).toBe('dark');
   });
 });
