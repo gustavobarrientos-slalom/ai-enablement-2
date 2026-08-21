@@ -12,3 +12,4 @@ The project documentation will be built during the bootcamp sessions.
 - [UI Guidelines](../docs/ui-guidelines.md) - Core TODO app UI, Tailwind CSS, Untitled UI, and light/dark theme guidance
 - [Functional Requirements](../docs/functional-requirements.md) - Core TODO application requirements
 - [Testing Guidelines](../docs/testing-guidelines.md) - Testing strategy, commands, and coverage expectations
+- [Coding Guidelines](../docs/coding-guidelines.md) - Formatting, imports, linting, and maintainable coding practices
